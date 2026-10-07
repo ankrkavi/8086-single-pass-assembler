@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>8086 Single Pass Assembler</title>
+    <meta name="description" content="Educational 8086 Single Pass Assembler demonstrating Location Counter, Symbol Table, Forward References, Backpatching, and Machine Code Generation." />
+    <meta property="og:title" content="8086 Single Pass Assembler" />
+    <meta property="og:description" content="Educational 8086 Single Pass Assembler demonstrating Location Counter, Symbol Table, Forward References, Backpatching, and Machine Code Generation." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <!-- App Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="chip-icon">8086</div>
+        <div class="app-title-group">
+          <h1>
+            8086 Single Pass Assembler
+            <span class="badge-tag">PBL Edition</span>
+          </h1>
+          <p>System Programming Simulation • Location Counter, Forward References &amp; Backpatching</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <select id="exampleSelect" class="select-input" title="Load Preset Example Program">
+          <option value="forward_ref">Example: Forward Reference &amp; Backpatching</option>
+          <option value="branching">Example: Branching (JE / JNE)</option>
+          <option value="data_vars">Example: DB, DW &amp; EQU Directives</option>
+          <option value="loop_counter">Example: Backward &amp; Forward Loop</option>
+          <option value="multi_label">Example: Multiple Labels on Single Line</option>
+          <option value="error_demo">Example: Error Detection Test</option>
+        </select>
+
+        <button id="btnAssemble" class="btn btn-primary" title="Execute entire assembly in a single pass">
+          ▶ Assemble (Run All)
+        </button>
+        <button id="btnStep" class="btn btn-step" title="Execute line-by-line and inspect internal states">
+          ⏭ Step
+        </button>
+        <button id="btnReset" class="btn btn-secondary" title="Reset assembler to beginning">
+          ↺ Reset
+        </button>
+        <button id="btnClear" class="btn btn-danger" title="Clear assembly source code">
+          ✕ Clear
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="main-layout">
+      <!-- Left Panel: Assembly Source Code Editor -->
+      <section class="card editor-wrapper">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="indicator indicator-cyan"></span>
+            8086 Source Code Editor
+          </div>
+          <span id="statusText" class="badge badge-backpatched">Ready</span>
+        </div>
+
+        <div class="editor-toolbar">
+          <span>Target Architecture: 8086 Real Mode Subset</span>
+          <span>Single-Pass Algorithm</span>
+        </div>
+
+        <div class="code-container">
+          <div id="lineNumbers" class="line-numbers"></div>
+          <textarea
+            id="codeEditor"
+            class="code-textarea"
+            spellcheck="false"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            placeholder="Type or paste 8086 Assembly code here..."
+          ></textarea>
+        </div>
+
+        <div class="editor-footer">
+          <div class="status-indicator">
+            <span>● Status: Active</span>
+          </div>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">Tab size: 4 spaces • Comments start with ';'</span>
+        </div>
+
+        <!-- Cheatsheet Drawer -->
+        <div style="padding: 0 14px 14px 14px;">
+          <div class="cheatsheet-box">
+            <div class="cheatsheet-title">
+              <span>Supported 8086 Instruction Subset</span>
+              <span style="font-size: 0.68rem; color: var(--text-muted);">Real Machine Encodings</span>
+            </div>
+            <div class="cheatsheet-grid">
+              <div class="cheatsheet-item"><code>MOV reg, reg / imm</code> (2-3 bytes)</div>
+              <div class="cheatsheet-item"><code>ADD / SUB reg, op</code> (2-4 bytes)</div>
+              <div class="cheatsheet-item"><code>INC / DEC reg</code> (1-2 bytes)</div>
+              <div class="cheatsheet-item"><code>CMP reg, reg / imm</code> (2-4 bytes)</div>
+              <div class="cheatsheet-item"><code>JMP label</code> (3 bytes: near rel16)</div>
+              <div class="cheatsheet-item"><code>JE / JNE label</code> (2 bytes: short rel8)</div>
+              <div class="cheatsheet-item"><code>START / END</code> (directives)</div>
+              <div class="cheatsheet-item"><code>DB / DW / EQU</code> (data allocation)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panel: Execution Dashboard -->
+      <section class="card">
+        <!-- Top Stats Banner -->
+        <div style="padding: 14px 16px 0 16px;">
+          <div class="stats-banner">
+            <div class="stat-chip" data-tooltip="Address pointer maintained by assembler to allocate storage">
+              <span class="stat-label">Location Counter</span>
+              <span id="statLC" class="stat-value cyan">1000H</span>
+            </div>
+            <div class="stat-chip" data-tooltip="Total machine instructions assembled so far">
+              <span class="stat-label">Instructions</span>
+              <span id="statInstructions" class="stat-value emerald">0</span>
+            </div>
+            <div class="stat-chip" data-tooltip="Identifiers stored in the Symbol Table">
+              <span class="stat-label">Symbols</span>
+              <span id="statSymbols" class="stat-value">0</span>
+            </div>
+            <div class="stat-chip" data-tooltip="Forward references resolved vs total created">
+              <span class="stat-label">Forward Fixups</span>
+              <span id="statForwardRefs" class="stat-value amber">0/0</span>
+            </div>
+            <div class="stat-chip" data-tooltip="Syntax, duplicate, or undefined symbol errors detected">
+              <span class="stat-label">Errors</span>
+              <span id="statErrors" class="stat-value rose">0</span>
+            </div>
+          </div>
+          
+          <!-- Alert Box -->
+          <div id="alertContainer"></div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs-nav">
+          <button class="tab-btn active" data-tab="lc">
+            Location Counter Table <span id="badgeLC" class="tab-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="symbol">
+            Symbol Table <span id="badgeSymbol" class="tab-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="forward">
+            Forward References &amp; Backpatching <span id="badgeForward" class="tab-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="trace">
+            Intermediate Assembly Trace <span id="badgeTrace" class="tab-badge">0</span>
+          </button>
+          <button class="tab-btn" data-tab="output">
+            Object Code &amp; Memory Dump
+          </button>
+        </nav>
+
+        <!-- Tab 1: Location Counter Table -->
+        <div id="tab-lc" class="tab-pane active">
+          <div class="table-responsive">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px;">Line</th>
+                  <th style="width: 100px;">Address (LC)</th>
+                  <th>Source Statement</th>
+                  <th style="width: 90px;">Size</th>
+                  <th>Machine Code (Hex)</th>
+                </tr>
+              </thead>
+              <tbody id="lcTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Symbol Table -->
+        <div id="tab-symbol" class="tab-pane">
+          <div class="table-responsive">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Address (Value)</th>
+                  <th>Definition Status</th>
+                  <th>Type</th>
+                  <th>Referenced At Lines</th>
+                </tr>
+              </thead>
+              <tbody id="symbolTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: Forward Reference & Backpatching Table -->
+        <div id="tab-forward" class="tab-pane">
+          <div class="table-responsive">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  <th>Referenced At</th>
+                  <th>Patch Address (Size)</th>
+                  <th>Fixup Status</th>
+                  <th>Patched Value</th>
+                  <th>Displacement / Address Formula</th>
+                </tr>
+              </thead>
+              <tbody id="forwardTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 4: Intermediate Assembly Trace -->
+        <div id="tab-trace" class="tab-pane">
+          <div id="traceContainer" class="trace-container"></div>
+        </div>
+
+        <!-- Tab 5: Object Code & Memory Dump -->
+        <div id="tab-output" class="tab-pane">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 6px;">
+                DISASSEMBLY LISTING
+              </div>
+              <div id="disasmOutput" class="output-code-box"></div>
+            </div>
+
+            <div>
+              <div style="font-size: 0.78rem; font-weight: 700; color: var(--accent-emerald); margin-bottom: 6px;">
+                MEMORY BUFFER HEX DUMP (LITTLE-ENDIAN 8086 REAL-MODE STORAGE)
+              </div>
+              <div id="hexDumpOutput" class="output-code-box"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>8086 Single Pass Assembler • Academic Project Based Learning (PBL) System Programming Project</span>
+    </footer>
+
+    <!-- Vanilla Javascript Modular Entrypoint -->
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>

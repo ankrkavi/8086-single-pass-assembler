@@ -1,0 +1,6 @@
+{
+  "name": "8086 Single Pass Assembler",
+  "description": "Educational 8086 Single Pass Assembler demonstrating Location Counter, Symbol Table, Forward References, Backpatching, and Machine Code Generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
